@@ -1242,7 +1242,7 @@ class Seq2SeqModel:
         """  # noqa: ignore flake8"
 
         self._move_model_to_device()
-
+        output_scores = None
         all_outputs = []
         all_retrieved = []
         all_doc_scores = []
@@ -1303,7 +1303,7 @@ class Seq2SeqModel:
             input_ids = input_ids.to(self.device)
 
             if self.args.model_type in ["bart", "marian", "pegasus"]:
-                outputs = self.model.generate(
+                output_dict = self.model.generate(
                     input_ids=input_ids,
                     num_beams=self.args.num_beams,
                     max_length=self.args.max_length,
@@ -1314,13 +1314,23 @@ class Seq2SeqModel:
                     top_k=self.args.top_k,
                     top_p=self.args.top_p,
                     num_return_sequences=self.args.num_return_sequences,
+                    return_dict_in_generate=self.args.return_dict_in_generate,
+                    output_scores=self.args.output_scores
                 )
+                if self.args.output_scores and self.args.return_dict_in_generate:
+                    outputs = output_dict['sequences']
+                    if self.args.num_beams > 1:
+                        output_scores = output_dict['sequences_scores']
+                    else:
+                        output_scores = output_dict['scores']
+                else:
+                    outputs = output_dict
             elif self.args.model_type in ["mbart"]:
                 tgt_lang_token = self.decoder_tokenizer._convert_token_to_id(
                     self.args.tgt_lang
                 )
 
-                outputs = self.model.generate(
+                output_dict = self.model.generate(
                     input_ids=input_ids,
                     decoder_start_token_id=tgt_lang_token,
                     num_beams=self.args.num_beams,
@@ -1332,7 +1342,17 @@ class Seq2SeqModel:
                     top_k=self.args.top_k,
                     top_p=self.args.top_p,
                     num_return_sequences=self.args.num_return_sequences,
+                    return_dict_in_generate=self.args.return_dict_in_generate,
+                    output_scores=self.args.output_scores
                 )
+                if self.args.output_scores and self.args.return_dict_in_generate:
+                    outputs = output_dict['sequences']
+                    if self.args.num_beams > 1:
+                        output_scores = output_dict['sequences_scores']
+                    else:
+                        output_scores = output_dict['scores']
+                else:
+                    outputs = output_dict
             elif self.args.model_type in ["rag-token", "rag-sequence"]:
                 outputs = self.model.generate(
                     context_input_ids=docs_dict["context_input_ids"].to(self.device),
@@ -1355,7 +1375,7 @@ class Seq2SeqModel:
                     for doc in self.retriever.index.get_doc_dicts(docs_dict["doc_ids"])
                 ]
             else:
-                outputs = self.model.generate(
+                output_dict = self.model.generate(
                     input_ids=input_ids,
                     decoder_start_token_id=self.model.config.decoder.pad_token_id,
                     num_beams=self.args.num_beams,
@@ -1367,8 +1387,17 @@ class Seq2SeqModel:
                     top_k=self.args.top_k,
                     top_p=self.args.top_p,
                     num_return_sequences=self.args.num_return_sequences,
+                    return_dict_in_generate=self.args.return_dict_in_generate,
+                    output_scores=self.args.output_scores
                 )
-
+                if self.args.output_scores and self.args.return_dict_in_generate:
+                    outputs = output_dict['sequences']
+                    if self.args.num_beams > 1:
+                        output_scores = output_dict['sequences_scores']
+                    else:
+                        output_scores = output_dict['scores']
+                else:
+                    outputs = output_dict
             all_outputs.extend(outputs.cpu().numpy())
             if self.args.model_type in ["rag-token", "rag-sequence"]:
                 all_retrieved.extend(retrieved_docs)
@@ -1424,15 +1453,24 @@ class Seq2SeqModel:
                     ],
                 )
             else:
-                return [
-                    outputs[i : i + self.args.num_return_sequences]
-                    for i in range(0, len(outputs), self.args.num_return_sequences)
-                ]
+                if output_scores is not None:
+                    return [
+                        outputs[i : i + self.args.num_return_sequences]
+                        for i in range(0, len(outputs), self.args.num_return_sequences)
+                    ] , [
+                        output_scores[i : i + self.args.num_return_sequences]
+                        for i in range(0, len(output_scores), self.args.num_return_sequences)
+                    ]
+                else:
+                    return [
+                        outputs[i : i + self.args.num_return_sequences]
+                        for i in range(0, len(outputs), self.args.num_return_sequences)
+                    ]
         else:
             if self.args.model_type in ["rag-token", "rag-sequence"]:
                 return outputs, all_retrieved, all_doc_scores
             else:
-                return outputs
+                return outputs, output_scores
 
     def _decode(self, output_id):
         return self.decoder_tokenizer.decode(

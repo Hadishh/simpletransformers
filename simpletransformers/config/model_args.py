@@ -328,6 +328,8 @@ class Seq2SeqArgs(ModelArgs):
     top_k: float = None
     top_p: float = None
     use_multiprocessed_decoding: bool = False
+    output_scores=False
+    return_dict_in_generate=False
 
     def save(self, output_dir):
         os.makedirs(output_dir, exist_ok=True)
