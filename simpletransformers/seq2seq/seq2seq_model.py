@@ -1315,7 +1315,8 @@ class Seq2SeqModel:
                     top_p=self.args.top_p,
                     num_return_sequences=self.args.num_return_sequences,
                     return_dict_in_generate=self.args.return_dict_in_generate,
-                    output_scores=self.args.output_scores
+                    output_scores=self.args.output_scores,
+                    min_length=self.args.min_length
                 )
                 if self.args.output_scores and self.args.return_dict_in_generate:
                     outputs = output_dict['sequences']
