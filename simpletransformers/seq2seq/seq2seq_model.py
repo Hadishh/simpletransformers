@@ -1229,7 +1229,7 @@ class Seq2SeqModel:
                 writer.write("{} = {}\n".format(key, str(results[key])))
 
         return results
-
+    
     def predict(self, to_predict):
         """
         Performs predictions on a list of text.
@@ -1244,6 +1244,7 @@ class Seq2SeqModel:
         self._move_model_to_device()
         output_scores = None
         all_outputs = []
+        all_outputs_score = []
         all_retrieved = []
         all_doc_scores = []
         # Batching
@@ -1324,6 +1325,8 @@ class Seq2SeqModel:
                         output_scores = output_dict['sequences_scores']
                     else:
                         output_scores = output_dict['scores']
+                    all_outputs_score.extend(output_scores.cpu().numpy())
+
                 else:
                     outputs = output_dict
             elif self.args.model_type in ["mbart"]:
@@ -1352,6 +1355,7 @@ class Seq2SeqModel:
                         output_scores = output_dict['sequences_scores']
                     else:
                         output_scores = output_dict['scores']
+                    all_outputs_score.extend(output_scores.cpu().numpy())
                 else:
                     outputs = output_dict
             elif self.args.model_type in ["rag-token", "rag-sequence"]:
@@ -1397,9 +1401,11 @@ class Seq2SeqModel:
                         output_scores = output_dict['sequences_scores']
                     else:
                         output_scores = output_dict['scores']
+                    all_outputs_score.extend(output_scores.cpu().numpy())
                 else:
                     outputs = output_dict
             all_outputs.extend(outputs.cpu().numpy())
+            all
             if self.args.model_type in ["rag-token", "rag-sequence"]:
                 all_retrieved.extend(retrieved_docs)
                 all_doc_scores.extend(doc_scores.detach().cpu())
@@ -1436,7 +1442,7 @@ class Seq2SeqModel:
                 )
                 for output_id in all_outputs
             ]
-
+        all_outputs_score = None if len(all_outputs_score) == 0 else all_outputs_score
         if self.args.num_return_sequences > 1:
             if self.args.model_type in ["rag-token", "rag-sequence"]:
                 return (
@@ -1454,13 +1460,13 @@ class Seq2SeqModel:
                     ],
                 )
             else:
-                if output_scores is not None:
+                if all_outputs_score is not None:
                     return [
                         outputs[i : i + self.args.num_return_sequences]
                         for i in range(0, len(outputs), self.args.num_return_sequences)
                     ] , [
-                        output_scores[i : i + self.args.num_return_sequences]
-                        for i in range(0, len(output_scores), self.args.num_return_sequences)
+                        all_outputs_score[i : i + self.args.num_return_sequences]
+                        for i in range(0, len(all_outputs_score), self.args.num_return_sequences)
                     ]
                 else:
                     return [
@@ -1471,7 +1477,7 @@ class Seq2SeqModel:
             if self.args.model_type in ["rag-token", "rag-sequence"]:
                 return outputs, all_retrieved, all_doc_scores
             else:
-                return outputs, output_scores
+                return outputs, all_outputs_score
 
     def _decode(self, output_id):
         return self.decoder_tokenizer.decode(
